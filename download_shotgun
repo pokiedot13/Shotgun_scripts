@@ -1,0 +1,60 @@
+#!/bin/bash
+#SBATCH --job-name=PRJNA1222911_dl
+#SBATCH --array=0-26%5
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=64G
+#SBATCH --time=24:00:00
+#SBATCH -p biosoc2
+#SBATCH --output=/home/alr34/slurm/logs/%A_%a-download.out
+#SBATCH --mail-type=END,FAIL
+#SBATCH --mail-user=alr34@kent.ac.uk
+
+set -euo pipefail
+
+# ----------------------------------
+# Load environment
+# ----------------------------------
+source ~/anaconda3/etc/profile.d/conda.sh
+conda activate sra_env
+
+# ----------------------------------
+# Config ##DONT FORGET TO GET SRR_ACC list off the SRA
+# ----------------------------------
+PROJECT=PRJNA1222911
+OUTDIR=~/blasto_meta/rawdata/${PROJECT}_full
+ACC_FILE=~/blasto_meta/rawdata/SRR_Acc_List.txt
+
+mkdir -p "$OUTDIR"
+cd "$OUTDIR"
+
+# ----------------------------------
+# Get accession for this task
+# ----------------------------------
+mapfile -t ACCS < "$ACC_FILE"
+ACC=${ACCS[$SLURM_ARRAY_TASK_ID]}
+
+echo "Downloading $ACC"
+
+# ----------------------------------
+# Download with fasterq-dump
+# ----------------------------------
+fasterq-dump "$ACC" \
+    --split-files \
+    --threads $SLURM_CPUS_PER_TASK \
+    --mem 32G \
+    --outdir "$OUTDIR"
+
+# ----------------------------------
+# Compress (important)
+# ----------------------------------
+pigz -p $SLURM_CPUS_PER_TASK ${ACC}_1.fastq
+pigz -p $SLURM_CPUS_PER_TASK ${ACC}_2.fastq
+
+# ----------------------------------
+# Verify integrity
+# ----------------------------------
+gzip -t ${ACC}_1.fastq.gz
+gzip -t ${ACC}_2.fastq.gz
+
+echo "$ACC DONE"
+conda deactivate
