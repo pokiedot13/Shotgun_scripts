@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=preprocess
-#SBATCH --array=0-53%3
+#SBATCH --array=0-53%3     ### 0-the number of files-1 % the amount you want to run at once
 #SBATCH --cpus-per-task=10
 #SBATCH --mem=48G
 #SBATCH -p biosoc2
