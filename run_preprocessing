@@ -1,0 +1,62 @@
+#!/bin/bash
+#SBATCH --job-name=preprocess
+#SBATCH --array=0-53%3
+#SBATCH --cpus-per-task=10
+#SBATCH --mem=48G
+#SBATCH -p biosoc2
+#SBATCH --time=24:00:00
+#SBATCH --mail-type=END
+#SBATCH --mail-user=alr34@kent.ac.uk
+#SBATCH --output=/home/alr34/slurm/logs/%A_%a-preprocess.out
+
+set -euo pipefail
+
+source ~/anaconda3/etc/profile.d/conda.sh
+conda activate segataprocess
+
+# -------- paths --------#Change the project folders to yours
+RAW_DIR=~/blasto_meta/rawdata/PRJNA271618_full
+OUT_DIR=~/blasto_meta/processed/PRJNA271618
+SCRATCH_DIR=~/tmp_metaproc
+
+mkdir -p "$OUT_DIR"
+mkdir -p "$SCRATCH_DIR"
+
+# -------- sample list --------
+mapfile -t SAMPLES < <(ls ${RAW_DIR}/SRR*_1.fastq.gz | sed 's/_1.fastq.gz//' | sort)
+
+SAMPLE=${SAMPLES[$SLURM_ARRAY_TASK_ID]}
+BASENAME=$(basename "$SAMPLE")
+
+echo "ARRAY ID: $SLURM_ARRAY_TASK_ID"
+echo "Processing $BASENAME"
+
+# -------- scratch working dir --------
+WORKDIR=${SCRATCH_DIR}/${BASENAME}
+mkdir -p "$WORKDIR"
+
+# copy input to scratch
+cp ${RAW_DIR}/${BASENAME}_1.fastq.gz "$WORKDIR"/
+cp ${RAW_DIR}/${BASENAME}_2.fastq.gz "$WORKDIR"/
+
+cd "$WORKDIR"
+
+# -------- run preprocessing --------
+preprocess.new.py \
+   -i "$WORKDIR" \
+   -n 10 \
+   --verbose \
+   -f "_1" -r "_2" \
+   -s "$BASENAME" \
+   --bowtie2_indexes /home/alr34/databases/bowtie2_indexes \
+   --rm_hsap \
+   --rm_baboon
+
+# -------- move results back --------
+mv *baboon_human*.fastq.bz2 "$OUT_DIR"/
+
+# -------- cleanup scratch --------
+cd /
+rm -rf "$WORKDIR"
+
+conda deactivate
